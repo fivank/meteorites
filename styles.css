@@ -8,3 +8,10 @@ body, html {
 canvas {
     display: block;
 }
+
+/* For screens wider than 768px (tablet and PC) */
+@media (min-width: 769px) {
+    body, html {
+        background: #000; /* Black borders */
+    }
+}

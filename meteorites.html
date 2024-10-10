@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Juego de Esquivar con Phaser Mejorado</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to bottom, #1e3c72, #2a5298);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        #fileOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(30, 60, 114, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        #fileOverlay h1 {
+            margin-bottom: 20px;
+            font-size: 40px;
+        }
+        #fileOverlay input[type="file"] {
+            display: none;
+        }
+        #fileOverlay label {
+            padding: 15px 30px;
+            background-color: #0f0;
+            color: #000;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        #fileOverlay button {
+            padding: 10px 20px;
+            background-color: #555;
+            color: #fff;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #fileOverlay button:hover {
+            background-color: #777;
+        }
+    </style>
+</head>
+<body>
+
+<div id="fileOverlay">
+    <h1>Selecciona Música de Fondo</h1>
+    <label for="musicInput">Elegir Archivo MP3</label>
+    <input type="file" id="musicInput" accept="audio/*">
+    <button id="skipButton">Usar Melodía Predeterminada</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+
+<script>
+    function darkenColor(color, percentage) {
+        const r = (color >> 16) & 0xFF;
+        const g = (color >> 8) & 0xFF;
+        const b = color & 0xFF;
+
+        const newR = Math.floor(r * (1 - percentage));
+        const newG = Math.floor(g * (1 - percentage));
+        const newB = Math.floor(b * (1 - percentage));
+
+        return (newR << 16) | (newG << 8) | newB;
+    }
+
+    function drawIrregularCircle(graphics, size) {
+        const numPoints = 16;
+        const angleStep = (Math.PI * 2) / numPoints;
+        const points = [];
+
+        for(let i = 0; i < numPoints; i++) {
+            const angle = i * angleStep;
+            const radiusVariation = Phaser.Math.FloatBetween(0.6, 1.0);
+            const currentRadius = (size / 2) * radiusVariation;
+            const x = size / 2 + currentRadius * Math.cos(angle);
+            const y = size / 2 + currentRadius * Math.sin(angle);
+            points.push(x, y);
+        }
+
+        graphics.beginPath();
+        graphics.moveTo(points[0], points[1]);
+        for(let i = 2; i < points.length; i += 2) {
+            graphics.lineTo(points[i], points[i + 1]);
+        }
+        graphics.closePath();
+        graphics.fillPath();
+    }
+
+    function addTextureDots(graphics, size) {
+        const numDots = Math.floor(size * 0.8);
+        const maxDotSize = 6;
+
+        for(let i = 0; i < numDots; i++) {
+            const dotSize = Phaser.Math.Between(2, 6);
+            const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const radius = Phaser.Math.FloatBetween(0, (size * 0.4) - dotSize);
+            const x = size / 2 + radius * Math.cos(angle);
+            const y = size / 2 + radius * Math.sin(angle);
+            graphics.fillStyle(0x000000, 1);
+            graphics.fillCircle(x, y, dotSize);
+        }
+    }
+
+    function createControlButton(scene, x, y, direction) {
+        const buttonRadius = 120;
+
+        const container = scene.add.container(x, y).setDepth(30);
+
+        const button = scene.add.circle(0, 0, buttonRadius, 0x555555).setInteractive({ useHandCursor: true });
+        container.add(button);
+
+        const arrow = scene.add.graphics();
+        arrow.fillStyle(0xffffff, 1);
+        if (direction === 'left') {
+            arrow.fillTriangle(30, -40, 30, 40, -30, 0);
+        } else {
+            arrow.fillTriangle(-30, -40, -30, 40, 30, 0);
+        }
+        container.add(arrow);
+
+        button.on('pointerdown', () => {
+            button.setFillStyle(0x777777);
+        });
+
+        button.on('pointerup', () => {
+            button.setFillStyle(0x555555);
+        });
+
+        button.on('pointerout', () => {
+            button.setFillStyle(0x555555);
+        });
+
+        return container;
+    }
+
+    class MainMenu extends Phaser.Scene {
+        constructor() {
+            super({ key: 'MainMenu' });
+        }
+
+        create() {
+            const fileOverlay = document.getElementById('fileOverlay');
+            const musicInput = document.getElementById('musicInput');
+            const skipButton = document.getElementById('skipButton');
+
+            const onFileChange = (event) => {
+                const file = event.target.files[0];
+                if (file && (file.type === 'audio/mp3' || file.type === 'audio/mpeg' || file.type.startsWith('audio/'))) {
+                    const url = URL.createObjectURL(file);
+                    fileOverlay.style.display = 'none';
+
+                    musicInput.removeEventListener('change', onFileChange);
+                    skipButton.removeEventListener('click', onSkipButtonClick);
+
+                    this.registry.set('audioUrl', url);
+                    this.registry.set('userMusicLoaded', false);
+                    
+                    this.scene.start('GameScene');
+                } else {
+                    alert('Por favor, selecciona un archivo de audio válido.');
+                }
+            };
+
+            const onSkipButtonClick = () => {
+                fileOverlay.style.display = 'none';
+
+                musicInput.removeEventListener('change', onFileChange);
+                skipButton.removeEventListener('click', onSkipButtonClick);
+                
+                const audioUrl = this.registry.get('audioUrl');
+                const userMusicLoaded = this.registry.get('userMusicLoaded');
+
+                if (audioUrl && !userMusicLoaded) {
+                    this.load.audio('userBackgroundMusic', audioUrl);
+
+                    this.load.once('complete', () => {
+                        try {
+                            this.backgroundMusic = this.sound.add('userBackgroundMusic', { loop: true, volume: 0.5 });
+                            this.backgroundMusic.play();
+                            this.registry.set('userMusicLoaded', true);
+                        } catch (e) {
+                            console.error('Error playing audio:', e);
+                            alert('Error reproduciendo el archivo de audio. Por favor, intenta con otro archivo.');
+
+                            this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
+                            this.backgroundMusic.play();
+                        }
+                        this.scene.start('GameScene');
+                    });
+
+                    this.load.start();
+                    this.registry.set('audioUrl', null);
+                } else {
+                    this.scene.start('GameScene');
+                }
+            };
+
+            musicInput.addEventListener('change', onFileChange);
+            skipButton.addEventListener('click', onSkipButtonClick);
+        }
+    }
+
+    class GameScene extends Phaser.Scene {
+        constructor() {
+            super({ key: 'GameScene' });
+        }
+
+        preload() {
+            this.obstacleSizes = [60, 90, 120, 150];
+            this.obstacleProbabilities = [0.5, 0.3, 0.15, 0.05];
+            this.obstacleCumulativeProbabilities = [];
+            let cumulative = 0;
+            for (let i = 0; i < this.obstacleProbabilities.length; i++) {
+                cumulative += this.obstacleProbabilities[i];
+                this.obstacleCumulativeProbabilities.push(cumulative);
+            }
+
+            this.obstacleSizes.forEach((size, index) => {
+                const obstacleGraphics = this.add.graphics();
+                obstacleGraphics.fillStyle(0xffffff, 1);
+                drawIrregularCircle(obstacleGraphics, size);
+                addTextureDots(obstacleGraphics, size);
+                obstacleGraphics.generateTexture(`obstacle${index + 1}`, size, size);
+                obstacleGraphics.destroy();
+            });
+
+            const playerSize = 60;
+            const playerGraphics = this.add.graphics();
+            playerGraphics.fillStyle(0xffffff, 1);
+            playerGraphics.fillCircle(playerSize / 2, playerSize / 2, playerSize / 2);
+            playerGraphics.generateTexture('playerTexture', playerSize, playerSize);
+            playerGraphics.destroy();
+
+            const particleSize = 16;
+            const particle = this.add.graphics();
+            particle.fillStyle(0xffffff, 1);
+            particle.fillCircle(particleSize / 2, particleSize / 2, particleSize / 2);
+            particle.generateTexture('particle', particleSize, particleSize);
+            particle.destroy();
+
+            this.load.audio('defaultBackgroundMusic', 'background.mp3');
+        }
+
+        create() {
+            this.setVirtualBounds();
+            this.playerSpeed = 500;
+            this.highScore = parseInt(localStorage.getItem('highScore')) || 0;
+
+            this.player = this.physics.add.sprite(this.cameras.main.centerX, this.cameras.main.height * 0.7, 'playerTexture')
+                .setInteractive()
+                .setCollideWorldBounds(true);
+            this.player.body.setCircle(30);
+            this.player.body.setImmovable(true);
+
+            this.obstacles = this.physics.add.group({
+                collideWorldBounds: true,
+                bounceX: 1,
+                bounceY: 1
+            });
+
+            this.physics.add.collider(this.obstacles, this.obstacles, this.handleMeteorCollision, null, this);
+            this.physics.add.overlap(this.player, this.obstacles, this.handleCollision, null, this);
+
+            this.obstacleColors = [
+                { color: 0xffff00, speedY: 80 },
+                { color: 0xffa500, speedY: 160 },
+                { color: 0xff0000, speedY: 230 },
+                { color: 0x800080, speedY: 320 }
+            ];
+
+            this.stars = this.addStars(100);
+            this.score = 0;
+            this.level = 1;
+            this.scoreText = this.add.text(20, 20, `Score: ${this.score} | Nivel: ${this.level} | High Score: ${this.highScore}`, { 
+                fontSize: '40px', 
+                fill: '#fff' 
+            });
+
+            this.obstacleTimer = this.time.addEvent({ 
+                delay: 2300, 
+                callback: this.addObstacle, 
+                callbackScope: this, 
+                loop: true 
+            });
+
+            this.levelTimer = this.time.addEvent({ 
+                delay: 21000, 
+                callback: this.increaseLevel, 
+                callbackScope: this, 
+                loop: true 
+            });
+
+            this.createOnScreenControls();
+
+            this.flashOverlay = this.add.rectangle(0, 0, this.cameras.main.width, this.cameras.main.height, 0xffffff, 0)
+                .setOrigin(0)
+                .setDepth(10);
+
+            this.particles = this.add.particles('particle');
+            this.explosionEmitter = this.particles.createEmitter({
+                x: 0,
+                y: 0,
+                speed: { min: -300, max: 300 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 1, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: 1000,
+                quantity: 100,
+                on: false
+            });
+
+            this.meteorCollisionParticles = this.add.particles('particle');
+            this.meteorCollisionEmitter = this.meteorCollisionParticles.createEmitter({
+                x: 0,
+                y: 0,
+                speed: { min: -200, max: 200 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 0.5, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: 600,
+                quantity: 70,
+                blendMode: 'ADD',
+                on: false
+            });
+
+            const audioUrl = this.registry.get('audioUrl');
+            const userMusicLoaded = this.registry.get('userMusicLoaded');
+
+            if (audioUrl && !userMusicLoaded) {
+                this.load.audio('userBackgroundMusic', audioUrl);
+
+                this.load.once('complete', () => {
+                    try {
+                        this.backgroundMusic = this.sound.add('userBackgroundMusic', { loop: true, volume: 0.5 });
+                        this.backgroundMusic.play();
+                        this.registry.set('userMusicLoaded', true);
+                    } catch (e) {
+                        console.error('Error playing audio:', e);
+                        alert('Error reproduciendo el archivo de audio. Por favor, intenta con otro archivo.');
+
+                        this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
+                        this.backgroundMusic.play();
+                    }
+                });
+
+                this.load.once('loaderror', (fileObj) => {
+                    console.error('Error loading audio file:', fileObj.src);
+                    alert('Error cargando el archivo de audio. Por favor, intenta con otro archivo.');
+
+                    this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
+                    this.backgroundMusic.play();
+                });
+
+                this.load.start();
+            } else {
+                if (!this.sound.get('defaultBackgroundMusic')) {
+                    this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
+                    this.backgroundMusic.play();
+                } else if (!this.sound.get('defaultBackgroundMusic').isPlaying) {
+                    this.backgroundMusic = this.sound.get('defaultBackgroundMusic');
+                    if (this.backgroundMusic) {
+                        this.backgroundMusic.play();
+                    }
+                }
+            }
+
+            this.input.on('pointerdown', () => {
+                if (this.sound.context.state === 'suspended') {
+                    this.sound.context.resume();
+                }
+            });
+        }
+
+        update() {
+            this.movePlayer();
+            this.moveStars();
+            this.updateObstacles();
+        }
+
+        createOnScreenControls() {
+            this.leftControl = createControlButton(this, 100, this.cameras.main.height - 100, 'left');
+            this.rightControl = createControlButton(this, this.cameras.main.width - 100, this.cameras.main.height - 100, 'right');
+
+            this.leftControl.getAt(0).on('pointerdown', () => {
+                this.player.setVelocityX(-this.playerSpeed);
+            });
+
+            this.leftControl.getAt(0).on('pointerup', () => {
+                this.player.setVelocityX(0);
+            });
+
+            this.leftControl.getAt(0).on('pointerout', () => {
+                this.player.setVelocityX(0);
+            });
+
+            this.rightControl.getAt(0).on('pointerdown', () => {
+                this.player.setVelocityX(this.playerSpeed);
+            });
+
+            this.rightControl.getAt(0).on('pointerup', () => {
+                this.player.setVelocityX(0);
+            });
+
+            this.rightControl.getAt(0).on('pointerout', () => {
+                this.player.setVelocityX(0);
+            });
+
+            this.scale.on('resize', this.resize, this);
+        }
+
+        movePlayer() {
+            // Player movement is handled via velocity set by controls
+        }
+
+        addObstacle() {
+            const rnd = Math.random();
+            let sizeIndex = 0;
+            for (let i = 0; i < this.obstacleCumulativeProbabilities.length; i++) {
+                if (rnd < this.obstacleCumulativeProbabilities[i]) {
+                    sizeIndex = i;
+                    break;
+                }
+            }
+            const size = this.obstacleSizes[sizeIndex];
+            const textureKey = `obstacle${sizeIndex + 1}`;
+            const radius = size / 2;
+
+            const colorObj = Phaser.Utils.Array.GetRandom(this.obstacleColors);
+            const baseColor = colorObj.color;
+            const speedY = colorObj.speedY;
+
+            const darkenedColor = darkenColor(baseColor, 0.5);
+
+            const virtualLeft = this.physics.world.bounds.left;
+            const virtualRight = this.physics.world.bounds.right;
+            const x = Phaser.Math.Between(virtualLeft + radius, virtualRight - radius);
+
+            const speedX = Phaser.Math.Between(-120, 120);
+
+            const obstacle = this.obstacles.create(x, -size, textureKey)
+                .setDisplaySize(size, size)
+                .setTint(darkenedColor)
+                .setVelocity(speedX, speedY)
+                .setBounce(1)
+                .setCollideWorldBounds(true)
+                .setImmovable(false);
+
+            obstacle.customColor = darkenedColor;
+            obstacle.body.setCircle(radius);
+            obstacle.body.mass = Math.pow(size, 3) / 1000;
+        }
+
+        moveStars() {
+            this.stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > this.cameras.main.height) {
+                    star.y = 0;
+                    star.x = Phaser.Math.Between(0, this.cameras.main.width);
+                }
+            });
+        }
+
+        addStars(count) {
+            const stars = [];
+            for (let i = 0; i < count; i++) {
+                const star = this.add.circle(
+                    Phaser.Math.Between(0, this.cameras.main.width),
+                    Phaser.Math.Between(0, this.cameras.main.height),
+                    Phaser.Math.Between(1, 3),
+                    0xffffff
+                );
+                star.speed = Phaser.Math.FloatBetween(0.5, 2);
+                stars.push(star);
+            }
+            return stars;
+        }
+
+        updateObstacles() {
+            this.obstacles.getChildren().forEach(obstacle => {
+                if (obstacle.y > this.cameras.main.height + obstacle.displayHeight) {
+                    obstacle.destroy();
+                    this.score++;
+                    
+                    if (this.score > this.highScore) {
+                        this.highScore = this.score;
+                        localStorage.setItem('highScore', this.highScore);
+                    }
+
+                    this.scoreText.setText(`Score: ${this.score} | Nivel: ${this.level} | High Score: ${this.highScore}`);
+                }
+            });
+        }
+
+        increaseLevel() {
+            this.level++;
+            this.scoreText.setText(`Score: ${this.score} | Nivel: ${this.level} | High Score: ${this.highScore}`);
+            this.obstacleTimer.delay = Math.max(500, this.obstacleTimer.delay * 0.9);
+            this.obstacleTimer.reset({ delay: this.obstacleTimer.delay, callback: this.addObstacle, callbackScope: this, loop: true });
+            this.flashScreen(0xffffff, 300);
+        }
+
+        handleCollision(player, obstacle) {
+            this.explosionEmitter.emitParticleAt(player.x, player.y);
+            this.player.setVisible(false);
+            this.playExplosionSound();
+
+            this.time.delayedCall(1000, () => {
+                this.scene.start('GameOverScene', { score: this.score, level: this.level, highScore: this.highScore });
+            });
+        }
+
+        handleMeteorCollision(obj1, obj2) {
+            const body1 = obj1.body;
+            const body2 = obj2.body;
+
+            const normal = new Phaser.Math.Vector2(body2.x - body1.x, body2.y - body1.y);
+            normal.normalize();
+
+            const relativeVelocity = new Phaser.Math.Vector2(body1.velocity.x - body2.velocity.x, body1.velocity.y - body2.velocity.y);
+            const speed = relativeVelocity.dot(normal);
+
+            if (speed < 0) {
+                return;
+            }
+
+            const impulse = (2 * speed) / (body1.mass + body2.mass);
+
+            body1.velocity.x -= impulse * body2.mass * normal.x;
+            body1.velocity.y -= impulse * body2.mass * normal.y;
+            body2.velocity.x += impulse * body1.mass * normal.x;
+            body2.velocity.y += impulse * body1.mass * normal.y;
+
+            const collisionX = (obj1.x + obj2.x) / 2;
+            const collisionY = (obj1.y + obj2.y) / 2;
+
+            const color1 = Phaser.Display.Color.IntegerToRGB(obj1.customColor);
+            const color2 = Phaser.Display.Color.IntegerToRGB(obj2.customColor);
+
+            const hexColor1 = (color1.r << 16) | (color1.g << 8) | color1.b;
+            const hexColor2 = (color2.r << 16) | (color2.g << 8) | color2.b;
+
+            this.meteorCollisionEmitter.setTint(hexColor1);
+            this.meteorCollisionEmitter.emitParticleAt(collisionX, collisionY);
+
+            this.meteorCollisionEmitter.setTint(hexColor2);
+            this.meteorCollisionEmitter.emitParticleAt(collisionX, collisionY);
+
+            const impactStrength = relativeVelocity.length();
+            this.playShockwaveSound(impactStrength);
+        }
+
+        flashScreen(color, duration) {
+            this.flashOverlay.fillColor = color;
+            this.flashOverlay.setAlpha(0.5);
+            this.tweens.add({
+                targets: this.flashOverlay,
+                alpha: 0,
+                duration: duration,
+                ease: 'Power2',
+                onComplete: () => {
+                    this.flashOverlay.fillColor = 0xffffff;
+                }
+            });
+        }
+
+        setVirtualBounds() {
+            const width = this.scale.width;
+            const height = this.scale.height;
+            const virtualLeft = -width / 3;
+            const virtualRight = width + width / 3;
+            const virtualWidth = virtualRight - virtualLeft;
+
+            this.physics.world.setBounds(virtualLeft, 0, virtualWidth, height);
+            this.physics.world.setBoundsCollision(true, true, true, false);
+        }
+
+        resize(gameSize) {
+            const width = gameSize.width;
+            const height = gameSize.height;
+            const virtualLeft = -width / 3;
+            const virtualRight = width + width / 3;
+            const virtualWidth = virtualRight - virtualLeft;
+
+            this.physics.world.setBounds(virtualLeft, 0, virtualWidth, height);
+            this.physics.world.setBoundsCollision(true, true, true, false);
+
+            this.leftControl.setPosition(100, height - 100);
+            this.rightControl.setPosition(width - 100, height - 100);
+
+            this.flashOverlay.setSize(width, height);
+            this.cameras.main.centerX = width / 2;
+            this.cameras.main.centerY = height / 2;
+            this.player.setPosition(width / 2, height * 0.7);
+            this.scoreText.setPosition(20, 20);
+        }
+
+        playExplosionSound() {
+            const audioCtx = this.sound.context;
+
+            const duration = 3.375;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'highpass';
+            const minFrequency = 1000;
+            const maxFrequency = 5000;
+            const scaledFrequency = Phaser.Math.Clamp(1000 + (Phaser.Math.FloatBetween(0, 1) * 4000), minFrequency, maxFrequency);
+            filter.frequency.value = scaledFrequency;
+            filter.Q.value = 10;
+
+            const distortion = audioCtx.createWaveShaper();
+            distortion.curve = this.makeDistortionCurve(300);
+            distortion.oversample = '4x';
+
+            const gain = audioCtx.createGain();
+            const initialGain = 0.2 + (Phaser.Math.FloatBetween(0, 0.8));
+            gain.gain.setValueAtTime(initialGain, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+            source.connect(filter);
+            filter.connect(distortion);
+            distortion.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            source.start();
+
+            source.onended = () => {
+                source.disconnect();
+                filter.disconnect();
+                distortion.disconnect();
+                gain.disconnect();
+            };
+        }
+
+        playShockwaveSound(impactStrength) {
+            const audioCtx = this.sound.context;
+
+            const duration = 2.25;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            const minFrequency = 200;
+            const maxFrequency = 1500;
+            const scaledFrequency = Phaser.Math.Clamp(200 + (impactStrength * 1.5), minFrequency, maxFrequency); // Adjusted scaling factor
+            filter.frequency.value = scaledFrequency;
+            filter.Q.value = 10;
+
+            const distortion = audioCtx.createWaveShaper();
+            distortion.curve = this.makeDistortionCurve(400);
+            distortion.oversample = '4x';
+
+            const gain = audioCtx.createGain();
+            const normalizedImpact = Phaser.Math.Clamp(impactStrength / 1000, 0, 1);
+            const initialGain = 0.05 + (normalizedImpact * 0.95);
+            gain.gain.setValueAtTime(initialGain, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+            source.connect(filter);
+            filter.connect(distortion);
+            distortion.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            source.start();
+
+            source.onended = () => {
+                source.disconnect();
+                filter.disconnect();
+                distortion.disconnect();
+                gain.disconnect();
+            };
+        }
+
+        makeDistortionCurve(amount) {
+            const k = typeof amount === 'number' ? amount : 50;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            const deg = Math.PI / 180;
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+    }
+
+    class GameOverScene extends Phaser.Scene {
+        constructor() {
+            super({ key: 'GameOverScene' });
+        }
+
+        create(data) {
+            this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 150, 'Game Over', { 
+                fontSize: '60px', 
+                fill: '#fff' 
+            }).setOrigin(0.5);
+            this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 80, `Score: ${data.score}`, { 
+                fontSize: '40px', 
+                fill: '#fff' 
+            }).setOrigin(0.5);
+            this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 30, `Nivel: ${data.level}`, { 
+                fontSize: '40px', 
+                fill: '#fff' 
+            }).setOrigin(0.5);
+            this.add.text(this.cameras.main.centerX, this.cameras.main.centerY + 20, `High Score: ${data.highScore}`, { 
+                fontSize: '40px', 
+                fill: '#fff' 
+            }).setOrigin(0.5);
+            this.add.text(this.cameras.main.centerX, this.cameras.main.centerY + 100, 'Reiniciar', { 
+                fontSize: '40px', 
+                fill: '#0f0', 
+                backgroundColor: '#000',
+                padding: { x: 20, y: 10 },
+                borderRadius: 10
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => { 
+                this.scene.start('GameScene'); 
+            });
+        }
+
+        resize(gameSize) {}
+    }
+
+    const config = {
+        type: Phaser.AUTO,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        backgroundColor: '#1e3c72',
+        scale: {
+            mode: Phaser.Scale.RESIZE,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        },
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 0 },
+                debug: false
+            }
+        },
+        scene: [MainMenu, GameScene, GameOverScene]
+    };
+
+    const game = new Phaser.Game(config);
+    window.addEventListener('resize', () => {
+        game.scale.resize(window.innerWidth, window.innerHeight);
+    });
+</script>
+
+</body>
+</html>

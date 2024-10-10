@@ -248,6 +248,11 @@ class GameScene extends Phaser.Scene {
             on: false
         });
 
+        // Stop existing background music if any
+        if (this.sound.get('backgroundMusic')) {
+            this.sound.get('backgroundMusic').stop();
+        }
+
         // Play background music
         this.backgroundMusic = this.sound.add('backgroundMusic', { loop: true, volume: 0.5 });
         this.backgroundMusic.play();
@@ -692,6 +697,10 @@ class GameOverScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { 
+            // Stop background music before restarting
+            if (this.scene.get('GameScene').backgroundMusic) {
+                this.scene.get('GameScene').backgroundMusic.stop();
+            }
             this.scene.start('GameScene'); 
         })
         .on('pointerover', () => {

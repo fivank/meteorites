@@ -88,72 +88,39 @@ class MainMenu extends Phaser.Scene {
     }
 
     create() {
-        const fileOverlay = document.getElementById('fileOverlay');
-        const musicInput = document.getElementById('musicInput');
-        const skipButton = document.getElementById('skipButton');
+        // Center coordinates
+        const centerX = this.cameras.main.centerX;
+        const centerY = this.cameras.main.centerY;
 
-        const onFileChange = (event) => {
-            const file = event.target.files[0];
-            if (file && (file.type === 'audio/mp3' || file.type === 'audio/mpeg' || file.type.startsWith('audio/'))) {
-                const url = URL.createObjectURL(file);
-                fileOverlay.style.display = 'none';
+        // Create Start Button as a Phaser Text Object
+        const startButton = this.add.text(centerX, centerY, 'Start', {
+            fontSize: '60px',
+            fill: '#0f0',
+            backgroundColor: '#000',
+            padding: { x: 20, y: 10 },
+            borderRadius: 10
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => { 
+            this.startGame(); 
+        })
+        .on('pointerover', () => {
+            startButton.setStyle({ fill: '#ff0' });
+        })
+        .on('pointerout', () => {
+            startButton.setStyle({ fill: '#0f0' });
+        });
 
-                musicInput.removeEventListener('change', onFileChange);
-                skipButton.removeEventListener('click', onSkipButtonClick);
+        // Optional: Add some instructions or title
+        this.add.text(centerX, centerY - 100, 'Juego de Esquivar', {
+            fontSize: '80px',
+            fill: '#fff'
+        }).setOrigin(0.5);
+    }
 
-                this.registry.set('audioUrl', url);
-                this.registry.set('userMusicLoaded', false);
-                
-                this.scene.start('GameScene');
-            } else {
-                alert('Por favor, selecciona un archivo de audio válido.');
-            }
-        };
-
-        const onSkipButtonClick = () => {
-            fileOverlay.style.display = 'none';
-
-            musicInput.removeEventListener('change', onFileChange);
-            skipButton.removeEventListener('click', onSkipButtonClick);
-            
-            const audioUrl = this.registry.get('audioUrl');
-            const userMusicLoaded = this.registry.get('userMusicLoaded');
-
-            if (audioUrl && !userMusicLoaded) {
-                this.load.audio('userBackgroundMusic', audioUrl);
-
-                this.load.once('complete', () => {
-                    try {
-                        this.backgroundMusic = this.sound.add('userBackgroundMusic', { loop: true, volume: 0.5 });
-                        this.backgroundMusic.play();
-                        this.registry.set('userMusicLoaded', true);
-                    } catch (e) {
-                        console.error('Error playing audio:', e);
-                        alert('Error reproduciendo el archivo de audio. Por favor, intenta con otro archivo.');
-
-                        this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
-                        this.backgroundMusic.play();
-                    }
-                    this.scene.start('GameScene');
-                });
-
-                this.load.once('loaderror', (fileObj) => {
-                    console.error('Error loading audio file:', fileObj.src);
-                    alert('Error cargando el archivo de audio. Por favor, intenta con otro archivo.');
-
-                    this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
-                    this.backgroundMusic.play();
-                });
-
-                this.load.start();
-                this.registry.set('audioUrl', null);
-            } else {
-                this.scene.start('GameScene');
-            }
-        };
-
-        musicInput.addEventListener('change', onFileChange);
-        skipButton.addEventListener('click', onSkipButtonClick);
+    startGame() {
+        this.scene.start('GameScene');
     }
 }
 
@@ -195,8 +162,8 @@ class GameScene extends Phaser.Scene {
         particle.generateTexture('particle', particleSize, particleSize);
         particle.destroy();
 
-        // Update the path if 'background.mp3' is in a different directory
-        this.load.audio('defaultBackgroundMusic', 'background.mp3');
+        // Load background music
+        this.load.audio('backgroundMusic', 'background.mp3');
     }
 
     create() {
@@ -281,49 +248,11 @@ class GameScene extends Phaser.Scene {
             on: false
         });
 
-        const audioUrl = this.registry.get('audioUrl');
-        const userMusicLoaded = this.registry.get('userMusicLoaded');
+        // Play background music
+        this.backgroundMusic = this.sound.add('backgroundMusic', { loop: true, volume: 0.5 });
+        this.backgroundMusic.play();
 
-        if (audioUrl && !userMusicLoaded) {
-            this.load.audio('userBackgroundMusic', audioUrl);
-
-            this.load.once('complete', () => {
-                try {
-                    this.backgroundMusic = this.sound.add('userBackgroundMusic', { loop: true, volume: 0.5 });
-                    this.backgroundMusic.play();
-                    this.registry.set('userMusicLoaded', true);
-                } catch (e) {
-                    console.error('Error playing audio:', e);
-                    alert('Error reproduciendo el archivo de audio. Por favor, intenta con otro archivo.');
-
-                    this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
-                    this.backgroundMusic.play();
-                }
-                this.scene.start('GameScene');
-            });
-
-            this.load.once('loaderror', (fileObj) => {
-                console.error('Error loading audio file:', fileObj.src);
-                alert('Error cargando el archivo de audio. Por favor, intenta con otro archivo.');
-
-                this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
-                this.backgroundMusic.play();
-            });
-
-            this.load.start();
-            this.registry.set('audioUrl', null);
-        } else {
-            if (!this.sound.get('defaultBackgroundMusic')) {
-                this.backgroundMusic = this.sound.add('defaultBackgroundMusic', { loop: true, volume: 0.5 });
-                this.backgroundMusic.play();
-            } else if (!this.sound.get('defaultBackgroundMusic').isPlaying) {
-                this.backgroundMusic = this.sound.get('defaultBackgroundMusic');
-                if (this.backgroundMusic) {
-                    this.backgroundMusic.play();
-                }
-            }
-        }
-
+        // Ensure audio context is resumed on user interaction (for autoplay restrictions)
         this.input.on('pointerdown', () => {
             if (this.sound.context.state === 'suspended') {
                 this.sound.context.resume();
@@ -667,23 +596,35 @@ class GameOverScene extends Phaser.Scene {
     }
 
     create(data) {
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 150, 'Game Over', { 
+        const centerX = this.cameras.main.centerX;
+        const centerY = this.cameras.main.centerY;
+
+        // Display Game Over Text
+        this.add.text(centerX, centerY - 150, 'Game Over', { 
             fontSize: '60px', 
             fill: '#fff' 
         }).setOrigin(0.5);
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 80, `Score: ${data.score}`, { 
+
+        // Display Score
+        this.add.text(centerX, centerY - 80, `Score: ${data.score}`, { 
             fontSize: '40px', 
             fill: '#fff' 
         }).setOrigin(0.5);
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 30, `Nivel: ${data.level}`, { 
+
+        // Display Level
+        this.add.text(centerX, centerY - 30, `Nivel: ${data.level}`, { 
             fontSize: '40px', 
             fill: '#fff' 
         }).setOrigin(0.5);
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY + 20, `High Score: ${data.highScore}`, { 
+
+        // Display High Score
+        this.add.text(centerX, centerY + 20, `High Score: ${data.highScore}`, { 
             fontSize: '40px', 
             fill: '#fff' 
         }).setOrigin(0.5);
-        this.add.text(this.cameras.main.centerX, this.cameras.main.centerY + 100, 'Reiniciar', { 
+
+        // Restart Button
+        const restartButton = this.add.text(centerX, centerY + 100, 'Reiniciar', { 
             fontSize: '40px', 
             fill: '#0f0', 
             backgroundColor: '#000',
@@ -694,6 +635,12 @@ class GameOverScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { 
             this.scene.start('GameScene'); 
+        })
+        .on('pointerover', () => {
+            restartButton.setStyle({ fill: '#ff0' });
+        })
+        .on('pointerout', () => {
+            restartButton.setStyle({ fill: '#0f0' });
         });
     }
 

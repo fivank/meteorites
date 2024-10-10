@@ -720,11 +720,8 @@ const config = {
     height: 1920, // Base height for scaling (portrait)
     backgroundColor: '#1e3c72',
     scale: {
-        mode: Phaser.Scale.FIT, // Use FIT to maintain aspect ratio
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        parent: 'game-container',
-        width: 1080,
-        height: 1920
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
     physics: {
         default: 'arcade',

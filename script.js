@@ -92,6 +92,12 @@ class MainMenu extends Phaser.Scene {
         const centerX = this.cameras.main.centerX;
         const centerY = this.cameras.main.centerY;
 
+        // Create Game Title
+        this.add.text(centerX, centerY - 100, 'Doge Meteorites', {
+            fontSize: '80px',
+            fill: '#fff'
+        }).setOrigin(0.5);
+
         // Create Start Button as a Phaser Text Object
         const startButton = this.add.text(centerX, centerY, 'Start', {
             fontSize: '60px',
@@ -111,12 +117,6 @@ class MainMenu extends Phaser.Scene {
         .on('pointerout', () => {
             startButton.setStyle({ fill: '#0f0' });
         });
-
-        // Optional: Add some instructions or title
-        this.add.text(centerX, centerY - 100, 'Juego de Esquivar', {
-            fontSize: '80px',
-            fill: '#fff'
-        }).setOrigin(0.5);
     }
 
     startGame() {
@@ -196,7 +196,7 @@ class GameScene extends Phaser.Scene {
         this.stars = this.addStars(100);
         this.score = 0;
         this.level = 1;
-        this.scoreText = this.add.text(20, 20, `Score: ${this.score} | Nivel: ${this.level} | High Score: ${this.highScore}`, { 
+        this.scoreText = this.add.text(20, 20, `Score: ${this.score} | Level: ${this.level} | High Score: ${this.highScore}`, { 
             fontSize: '40px', 
             fill: '#fff' 
         });
@@ -258,12 +258,43 @@ class GameScene extends Phaser.Scene {
                 this.sound.context.resume();
             }
         });
+
+        // Create Pause Zone
+        const pauseZoneHeight = 80; // Define the height of the top area to click for pausing
+        this.pauseZone = this.add.zone(0, 0, this.cameras.main.width, pauseZoneHeight)
+            .setOrigin(0)
+            .setDepth(1000) // Ensure it's on top
+            .setInteractive();
+
+        this.pauseZone.on('pointerdown', () => {
+            this.togglePause();
+        });
+
+        // Adjust pauseZone size on resize
+        this.scale.on('resize', this.resizePauseZone, this);
+
+        // Initialize pause state
+        this.isPaused = false;
+
+        // Create Paused Text (hidden initially)
+        this.pausedText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'Paused', {
+            fontSize: '80px',
+            fill: '#fff',
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            padding: { x: 20, y: 10 },
+            borderRadius: 10
+        })
+        .setOrigin(0.5)
+        .setDepth(1001)
+        .setVisible(false);
     }
 
     update() {
-        this.movePlayer();
-        this.moveStars();
-        this.updateObstacles();
+        if (!this.isPaused) {
+            this.movePlayer();
+            this.moveStars();
+            this.updateObstacles();
+        }
     }
 
     createOnScreenControls() {
@@ -375,14 +406,14 @@ class GameScene extends Phaser.Scene {
                     localStorage.setItem('highScore', this.highScore);
                 }
 
-                this.scoreText.setText(`Score: ${this.score} | Nivel: ${this.level} | High Score: ${this.highScore}`);
+                this.scoreText.setText(`Score: ${this.score} | Level: ${this.level} | High Score: ${this.highScore}`);
             }
         });
     }
 
     increaseLevel() {
         this.level++;
-        this.scoreText.setText(`Score: ${this.score} | Nivel: ${this.level} | High Score: ${this.highScore}`);
+        this.scoreText.setText(`Score: ${this.score} | Level: ${this.level} | High Score: ${this.highScore}`);
         this.obstacleTimer.delay = Math.max(500, this.obstacleTimer.delay * 0.9);
         this.obstacleTimer.reset({ delay: this.obstacleTimer.delay, callback: this.addObstacle, callbackScope: this, loop: true });
         this.flashScreen(0xffffff, 300);
@@ -480,6 +511,33 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.setCenter(width / 2, height / 2);
         this.player.setPosition(width / 2, height * 0.7);
         this.scoreText.setPosition(20, 20);
+
+        // Adjust pauseZone width
+        this.pauseZone.setSize(width, 80);
+    }
+
+    resizePauseZone(gameSize) {
+        const width = gameSize.width;
+        const pauseZoneHeight = 80;
+        this.pauseZone.setSize(width, pauseZoneHeight);
+    }
+
+    togglePause() {
+        if (this.isPaused) {
+            // Resume the game
+            this.isPaused = false;
+            this.physics.resume();
+            this.obstacleTimer.paused = false;
+            this.levelTimer.paused = false;
+            this.pausedText.setVisible(false);
+        } else {
+            // Pause the game
+            this.isPaused = true;
+            this.physics.pause();
+            this.obstacleTimer.paused = true;
+            this.levelTimer.paused = true;
+            this.pausedText.setVisible(true);
+        }
     }
 
     playExplosionSound() {
@@ -612,7 +670,7 @@ class GameOverScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // Display Level
-        this.add.text(centerX, centerY - 30, `Nivel: ${data.level}`, { 
+        this.add.text(centerX, centerY - 30, `Level: ${data.level}`, { 
             fontSize: '40px', 
             fill: '#fff' 
         }).setOrigin(0.5);

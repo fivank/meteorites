@@ -249,8 +249,8 @@ class GameScene extends Phaser.Scene {
         });
 
         // Stop existing background music if any
-        if (this.sound.get('backgroundMusic')) {
-            this.sound.get('backgroundMusic').stop();
+        if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
+            this.backgroundMusic.stop();
         }
 
         // Play background music
@@ -292,10 +292,22 @@ class GameScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(1001)
         .setVisible(false);
+
+        // Setup Keyboard Input
+        this.cursors = this.input.keyboard.createCursorKeys();
     }
 
     update() {
         if (!this.isPaused) {
+            // Handle keyboard input
+            if (this.cursors.left.isDown) {
+                this.player.setVelocityX(-this.playerSpeed);
+            } else if (this.cursors.right.isDown) {
+                this.player.setVelocityX(this.playerSpeed);
+            } else {
+                this.player.setVelocityX(0);
+            }
+
             this.movePlayer();
             this.moveStars();
             this.updateObstacles();
@@ -334,7 +346,7 @@ class GameScene extends Phaser.Scene {
     }
 
     movePlayer() {
-        // Player movement is handled via velocity set by controls
+        // Player movement is handled via velocity set by controls and keyboard
     }
 
     addObstacle() {
@@ -428,6 +440,11 @@ class GameScene extends Phaser.Scene {
         this.explosionEmitter.emitParticleAt(player.x, player.y);
         this.player.setVisible(false);
         this.playExplosionSound();
+
+        // Stop background music when game is over
+        if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
+            this.backgroundMusic.stop();
+        }
 
         this.time.delayedCall(1000, () => {
             this.scene.start('GameOverScene', { score: this.score, level: this.level, highScore: this.highScore });
@@ -698,8 +715,9 @@ class GameOverScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { 
             // Stop background music before restarting
-            if (this.scene.get('GameScene').backgroundMusic) {
-                this.scene.get('GameScene').backgroundMusic.stop();
+            const gameScene = this.scene.get('GameScene');
+            if (gameScene.backgroundMusic && gameScene.backgroundMusic.isPlaying) {
+                gameScene.backgroundMusic.stop();
             }
             this.scene.start('GameScene'); 
         })
@@ -717,12 +735,15 @@ class GameOverScene extends Phaser.Scene {
 // Phaser Game Configuration
 const config = {
     type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: 1080, // Base width for scaling
+    height: 2400, // Base height for scaling
     backgroundColor: '#1e3c72',
     scale: {
-        mode: Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        mode: Phaser.Scale.FIT, // Change to FIT for maintaining aspect ratio
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        parent: 'game-container', // Optional: Specify a parent container
+        width: '100%',
+        height: '100%'
     },
     physics: {
         default: 'arcade',

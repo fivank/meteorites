@@ -1,0 +1,52 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to bottom, #1e3c72, #2a5298);
+    overflow: hidden;
+}
+canvas {
+    display: block;
+}
+#fileOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(30, 60, 114, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+#fileOverlay h1 {
+    margin-bottom: 20px;
+    font-size: 40px;
+}
+#fileOverlay input[type="file"] {
+    display: none;
+}
+#fileOverlay label {
+    padding: 15px 30px;
+    background-color: #0f0;
+    color: #000;
+    font-size: 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+#fileOverlay button {
+    padding: 10px 20px;
+    background-color: #555;
+    color: #fff;
+    font-size: 18px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+#fileOverlay button:hover {
+    background-color: #777;
+}

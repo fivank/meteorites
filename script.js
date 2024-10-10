@@ -50,7 +50,7 @@ function addTextureDots(graphics, size) {
 }
 
 function createControlButton(scene, x, y, direction) {
-    const buttonRadius = 120;
+    const buttonRadius = 60;
 
     const container = scene.add.container(x, y).setDepth(30);
 
@@ -60,9 +60,9 @@ function createControlButton(scene, x, y, direction) {
     const arrow = scene.add.graphics();
     arrow.fillStyle(0xffffff, 1);
     if (direction === 'left') {
-        arrow.fillTriangle(30, -40, 30, 40, -30, 0);
+        arrow.fillTriangle(-20, -20, -20, 20, 20, 0);
     } else {
-        arrow.fillTriangle(-30, -40, -30, 40, 30, 0);
+        arrow.fillTriangle(20, -20, 20, 20, -20, 0);
     }
     container.add(arrow);
 
@@ -88,19 +88,17 @@ class MainMenu extends Phaser.Scene {
     }
 
     create() {
-        // Center coordinates
         const centerX = this.cameras.main.centerX;
         const centerY = this.cameras.main.centerY;
+        const minDimension = Math.min(this.cameras.main.width, this.cameras.main.height);
 
-        // Create Game Title
-        this.add.text(centerX, centerY - 100, 'Doge Meteorites', {
-            fontSize: '80px',
+        this.add.text(centerX, centerY - minDimension * 0.15, 'Doge Meteorites', {
+            fontSize: `${minDimension * 0.08}px`,
             fill: '#fff'
         }).setOrigin(0.5);
 
-        // Create Start Button as a Phaser Text Object
         const startButton = this.add.text(centerX, centerY, 'Start', {
-            fontSize: '60px',
+            fontSize: `${minDimension * 0.04}px`,
             fill: '#0f0',
             backgroundColor: '#000',
             padding: { x: 20, y: 10 },
@@ -162,7 +160,6 @@ class GameScene extends Phaser.Scene {
         particle.generateTexture('particle', particleSize, particleSize);
         particle.destroy();
 
-        // Load background music
         this.load.audio('backgroundMusic', 'background.mp3');
     }
 
@@ -196,8 +193,9 @@ class GameScene extends Phaser.Scene {
         this.stars = this.addStars(100);
         this.score = 0;
         this.level = 1;
+        const minDimension = Math.min(this.cameras.main.width, this.cameras.main.height);
         this.scoreText = this.add.text(20, 20, `Score: ${this.score} | Level: ${this.level} | High Score: ${this.highScore}`, { 
-            fontSize: '40px', 
+            fontSize: `${minDimension * 0.025}px`, 
             fill: '#fff' 
         });
 
@@ -248,42 +246,35 @@ class GameScene extends Phaser.Scene {
             on: false
         });
 
-        // Stop existing background music if any
         if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
             this.backgroundMusic.stop();
         }
 
-        // Play background music
         this.backgroundMusic = this.sound.add('backgroundMusic', { loop: true, volume: 0.5 });
         this.backgroundMusic.play();
 
-        // Ensure audio context is resumed on user interaction (for autoplay restrictions)
         this.input.on('pointerdown', () => {
             if (this.sound.context.state === 'suspended') {
                 this.sound.context.resume();
             }
         });
 
-        // Create Pause Zone
-        const pauseZoneHeight = 80; // Define the height of the top area to click for pausing
+        const pauseZoneHeight = 80;
         this.pauseZone = this.add.zone(0, 0, this.cameras.main.width, pauseZoneHeight)
             .setOrigin(0)
-            .setDepth(1000) // Ensure it's on top
+            .setDepth(1000)
             .setInteractive();
 
         this.pauseZone.on('pointerdown', () => {
             this.togglePause();
         });
 
-        // Adjust pauseZone size on resize
         this.scale.on('resize', this.resizePauseZone, this);
 
-        // Initialize pause state
         this.isPaused = false;
 
-        // Create Paused Text (hidden initially)
         this.pausedText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'Paused', {
-            fontSize: '80px',
+            fontSize: `${minDimension * 0.07}px`,
             fill: '#fff',
             backgroundColor: 'rgba(0,0,0,0.7)',
             padding: { x: 20, y: 10 },
@@ -293,13 +284,11 @@ class GameScene extends Phaser.Scene {
         .setDepth(1001)
         .setVisible(false);
 
-        // Setup Keyboard Input
         this.cursors = this.input.keyboard.createCursorKeys();
     }
 
     update() {
         if (!this.isPaused) {
-            // Handle keyboard input
             if (this.cursors.left.isDown) {
                 this.player.setVelocityX(-this.playerSpeed);
             } else if (this.cursors.right.isDown) {
@@ -315,8 +304,9 @@ class GameScene extends Phaser.Scene {
     }
 
     createOnScreenControls() {
-        this.leftControl = createControlButton(this, 100, this.cameras.main.height - 100, 'left');
-        this.rightControl = createControlButton(this, this.cameras.main.width - 100, this.cameras.main.height - 100, 'right');
+        const minDimension = Math.min(this.cameras.main.width, this.cameras.main.height);
+        this.leftControl = createControlButton(this, 100, this.cameras.main.height - 100, 'left').setScale(1);
+        this.rightControl = createControlButton(this, this.cameras.main.width - 100, this.cameras.main.height - 100, 'right').setScale(1);
 
         this.leftControl.getAt(0).on('pointerdown', () => {
             this.player.setVelocityX(-this.playerSpeed);
@@ -441,7 +431,6 @@ class GameScene extends Phaser.Scene {
         this.player.setVisible(false);
         this.playExplosionSound();
 
-        // Stop background music when game is over
         if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
             this.backgroundMusic.stop();
         }
@@ -534,7 +523,6 @@ class GameScene extends Phaser.Scene {
         this.player.setPosition(width / 2, height * 0.7);
         this.scoreText.setPosition(20, 20);
 
-        // Adjust pauseZone width
         this.pauseZone.setSize(width, 80);
     }
 
@@ -546,14 +534,12 @@ class GameScene extends Phaser.Scene {
 
     togglePause() {
         if (this.isPaused) {
-            // Resume the game
             this.isPaused = false;
             this.physics.resume();
             this.obstacleTimer.paused = false;
             this.levelTimer.paused = false;
             this.pausedText.setVisible(false);
         } else {
-            // Pause the game
             this.isPaused = true;
             this.physics.pause();
             this.obstacleTimer.paused = true;
@@ -678,34 +664,30 @@ class GameOverScene extends Phaser.Scene {
     create(data) {
         const centerX = this.cameras.main.centerX;
         const centerY = this.cameras.main.centerY;
+        const minDimension = Math.min(this.cameras.main.width, this.cameras.main.height);
 
-        // Display Game Over Text
-        this.add.text(centerX, centerY - 150, 'Game Over', { 
-            fontSize: '60px', 
+        this.add.text(centerX, centerY - minDimension * 0.15, 'Game Over', { 
+            fontSize: `${minDimension * 0.07}px`, 
             fill: '#fff' 
         }).setOrigin(0.5);
 
-        // Display Score
-        this.add.text(centerX, centerY - 80, `Score: ${data.score}`, { 
-            fontSize: '40px', 
+        this.add.text(centerX, centerY - minDimension * 0.04, `Score: ${data.score}`, { 
+            fontSize: `${minDimension * 0.035}px`, 
             fill: '#fff' 
         }).setOrigin(0.5);
 
-        // Display Level
-        this.add.text(centerX, centerY - 30, `Level: ${data.level}`, { 
-            fontSize: '40px', 
+        this.add.text(centerX, centerY + minDimension * 0.01, `Level: ${data.level}`, { 
+            fontSize: `${minDimension * 0.035}px`, 
             fill: '#fff' 
         }).setOrigin(0.5);
 
-        // Display High Score
-        this.add.text(centerX, centerY + 20, `High Score: ${data.highScore}`, { 
-            fontSize: '40px', 
+        this.add.text(centerX, centerY + minDimension * 0.05, `High Score: ${data.highScore}`, { 
+            fontSize: `${minDimension * 0.035}px`, 
             fill: '#fff' 
         }).setOrigin(0.5);
 
-        // Restart Button
-        const restartButton = this.add.text(centerX, centerY + 100, 'Reiniciar', { 
-            fontSize: '40px', 
+        const restartButton = this.add.text(centerX, centerY + minDimension * 0.15, 'Reiniciar', { 
+            fontSize: `${minDimension * 0.035}px`, 
             fill: '#0f0', 
             backgroundColor: '#000',
             padding: { x: 20, y: 10 },
@@ -714,7 +696,6 @@ class GameOverScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { 
-            // Stop background music before restarting
             const gameScene = this.scene.get('GameScene');
             if (gameScene.backgroundMusic && gameScene.backgroundMusic.isPlaying) {
                 gameScene.backgroundMusic.stop();
@@ -736,14 +717,14 @@ class GameOverScene extends Phaser.Scene {
 const config = {
     type: Phaser.AUTO,
     width: 1080, // Base width for scaling
-    height: 2400, // Base height for scaling
+    height: 1920, // Base height for scaling (portrait)
     backgroundColor: '#1e3c72',
     scale: {
-        mode: Phaser.Scale.FIT, // Change to FIT for maintaining aspect ratio
+        mode: Phaser.Scale.FIT, // Use FIT to maintain aspect ratio
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        parent: 'game-container', // Optional: Specify a parent container
-        width: '100%',
-        height: '100%'
+        parent: 'game-container',
+        width: 1080,
+        height: 1920
     },
     physics: {
         default: 'arcade',
